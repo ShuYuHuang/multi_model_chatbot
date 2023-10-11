@@ -1,0 +1,10 @@
+
+streamlit
+streamlit-chat
+langchain
+langchain-experimental
+openai
+python-dotenv
+elasticsearch
+tiktoken
+pypdf
