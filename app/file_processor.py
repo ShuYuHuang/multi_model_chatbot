@@ -23,16 +23,6 @@ from params import (
     MEDIA_FILE_TYPES,
     IMAGE_FILE_TYPES,
 )
-# load system variables
-import dotenv
-dotenv.load_dotenv()
-
-
-def extract_from_transcript(segments):
-
-    doc = "\n".join([f"{seg['text']} (00:{seg['start']:.2f})" for seg in  segments])
-
-    return doc
 
 DIARIZER_TEMPLATE = """
 Determine the characters for the transcript in SRT format, and assign the character to the beginning of transcript, e.g. 
@@ -52,7 +42,7 @@ diarizer_prompt = PromptTemplate(
 
 
 WHISPER_URL = 'http://10.100.100.106:8001/v1/audio/transcriptions'
-WHISPER_HEADERR = {
+WHISPER_HEADER = {
     'accept': 'application/json',
     'Content-Type': 'application/x-www-form-urlencoded'
 }
@@ -64,7 +54,16 @@ def transcribe(uploaded_file, whisper_model):
         'response_format': 'srt',
         'temperature': '0',
     }
-    return requests.post(WHISPER_URL, headers=WHISPER_HEADERR, data=data).json()
+    transcript = requests.post(WHISPER_URL, headers=WHISPER_HEADER, data=data).json()
+    # Save transcribe
+    with tempfile.NamedTemporaryFile(
+        delete=False,
+        prefix=uploaded_file,
+        suffix=".srt",
+        dir=DEFAULT_TMP_DIR) as tmp_file:
+            # Save a temporary file
+            tmp_file.write(transcript.encode('utf-8'))
+    return transcript
 
 def split_list(original_list, length):
     sublists = [original_list[i:i + length] for i in range(0, len(original_list), length)]
@@ -131,8 +130,11 @@ class FileProcessor:
     
     def extract_text_from_speech_audio(self, uploaded_file):
         
+        # Transcribe
         conversations = transcribe(uploaded_file, whisper_model=self.whisper_model)
         
+
+
         doc= []
         data = self.transcript_diarizer.run(transcript=conversations)
         doc.append(Document(page_content=data, metadata={"source": uploaded_file}))
@@ -155,10 +157,13 @@ class FileProcessor:
 
 
 if __name__ == '__main__':
-    # Create a file processor.
     import streamlit as st
-    import tempfile
-    import json
+    import tempfile 
+    import dotenv
+    # load system variables
+    dotenv.load_dotenv()
+
+    # Create a file processor.
     file_processor = FileProcessor(
         whisper_model='large-v2'
     )

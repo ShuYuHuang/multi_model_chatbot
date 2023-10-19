@@ -13,10 +13,15 @@ from datetime import timedelta
 import numpy as np
 import whisper
 
+from params import (
+    DEFAULT_MODEL_DIR,
+    DEFAULT_TMP_DIR
+)
+
 app = FastAPI()
 
 @lru_cache(maxsize=1)
-def get_whisper_model(whisper_model: str, download_root:str="../models"):
+def get_whisper_model(whisper_model: str, download_root:str=DEFAULT_MODEL_DIR):
     """Get a whisper model from the cache or download it if it doesn't exist"""
     model = whisper.load_model(
         whisper_model,
@@ -61,7 +66,6 @@ WHISPER_DEFAULT_SETTINGS = {
 #    "task": "translation",
 }
 
-UPLOAD_DIR="/tmp"
 
 def format_time(transcript):
     ret=""
@@ -120,7 +124,7 @@ async def transcriptions(
     if file is not None:
         filename = file.filename
         fileobj = file.file
-        uploaded_file = os.path.join(UPLOAD_DIR, filename)
+        uploaded_file = os.path.join(DEFAULT_TMP_DIR, filename)
         upload_file = open(uploaded_file, 'wb+')
         shutil.copyfileobj(fileobj, upload_file)
         upload_file.close()
