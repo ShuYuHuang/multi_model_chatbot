@@ -8,3 +8,4 @@ python-dotenv
 elasticsearch
 tiktoken
 pypdf
+openai-whisper==20230918

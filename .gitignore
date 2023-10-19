@@ -1,0 +1,6 @@
+__pycache__
+.env
+datas
+models
+tmp
+try.ipynb
