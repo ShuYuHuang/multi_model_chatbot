@@ -14,3 +14,5 @@ DEFAULT_LLM_ARGS = dict(
 DEFAULT_INDEX_NAME = "myindex"
 DEFAULT_ES_URL = "http://localhost:9200"
 DEFAULT_TMP_DIR = "tmp"
+
+DEFAULT_MODEL_DIR = "../models"

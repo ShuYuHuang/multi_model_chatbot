@@ -124,17 +124,21 @@ def delete_indices():
         response = requests.delete(f'{st.session_state["es_url"]}/{st.session_state["index_name"]}')
         print("deletion status:",response.text)
     st.session_state["file_uploader_key"] += 1
-    del st.session_state['generated'], st.session_state['past']
+    del st.session_state['generated'], st.session_state['past'], st.session_state["history"]
     st.rerun()
 
 def delete_conversations():
-    del st.session_state['generated'], st.session_state['past']
+    del st.session_state['generated'], st.session_state['past'], st.session_state["history"]
     st.rerun()
 
 
 if __name__ == '__main__':
     from langchain.chains import LLMChain
     from langchain.chat_models import ChatOpenAI
+    import dotenv
+    # load system variables
+    dotenv.load_dotenv()
+
     LLM_CLASS = ChatOpenAI
 
     st.title("MMChat 📄🎥📢🦜🦙")
