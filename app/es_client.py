@@ -1,6 +1,12 @@
-from langchain.embeddings.openai import OpenAIEmbeddings
+# from langchain.embeddings.openai import OpenAIEmbeddings
+# from langchain.chat_models import ChatOpenAI
+
+# Embedding and Language models
+from langchain.embeddings import HuggingFaceEmbeddings
+from vicuna_client import VicunaLLM
+
+# Vector database stuffs
 from langchain.vectorstores import ElasticsearchStore
-from langchain.chat_models import ChatOpenAI
 from langchain.retrievers.multi_query import MultiQueryRetriever
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
@@ -15,7 +21,8 @@ from file_processor import FileProcessor
 from params import (
     DEFAULT_ES_URL,
     DEFAULT_TMP_DIR,
-    DEFAULT_INDEX_NAME
+    DEFAULT_INDEX_NAME,
+    DEFAULT_MODEL_DIR
 )
 
 QUERY_TEMPLATE="""You are an AI language model assistant. Your task is to generate five 
@@ -45,8 +52,10 @@ class LineListOutputParser(PydanticOutputParser):
 @st.cache_resource(max_entries=10)
 class ElasticsearchIndexer:
     def __init__(self,
-                 embedding=OpenAIEmbeddings,
-                 llm=ChatOpenAI,
+                #  embedding=OpenAIEmbeddings,
+                #  llm=ChatOpenAI,
+                 embedding=HuggingFaceEmbeddings,
+                 llm=VicunaLLM,
                  query_prompt=example_query_prompt,
                  output_parser = LineListOutputParser(),
                  es_url=DEFAULT_ES_URL,
@@ -58,7 +67,7 @@ class ElasticsearchIndexer:
         self.vdb = ElasticsearchStore(
             es_url = self.es_url,
             index_name=self.index_name,
-            embedding=embedding(),
+            embedding=embedding(cache_folder=DEFAULT_MODEL_DIR),
             distance_strategy=distance_strategy
         )
         
