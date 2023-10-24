@@ -9,9 +9,9 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter, CharacterTex
 
 from langchain.schema import Document
 from langchain.chains import LLMChain
-from langchain.chat_models import ChatOpenAI
+# from langchain.chat_models import ChatOpenAI
+from vicuna_client import VicunaLLM
 from langchain.prompts import PromptTemplate
-# from model import WhisperModel, BLIPModel
 
 # for amount control
 import streamlit as st
@@ -25,6 +25,7 @@ from params import (
 )
 
 DIARIZER_TEMPLATE = """
+### Human
 Determine the characters for the transcript in SRT format, and assign the character to the beginning of transcript, e.g. 
 99
 00:32:01.000 --> 00 00:32:02.000
@@ -33,6 +34,7 @@ Speaker C: The suspect didn't show up last night
 Here is the input:
 {transcript}
 
+### Assistant
 Return:
 """
 diarizer_prompt = PromptTemplate(
@@ -72,7 +74,7 @@ def split_list(original_list, length):
 @st.cache_resource(max_entries=1)
 class FileProcessor:
     def __init__(self,
-                 llm_class=ChatOpenAI,
+                 llm_class=VicunaLLM,
                  llm_args=DEFAULT_LLM_ARGS,
                  model_root='models',
                  whisper_model="large-v2",
@@ -88,7 +90,8 @@ class FileProcessor:
         self.diarizer_prompt = diarizer_prompt
         self.llm_args = llm_args
         
-        self.llm = llm_class(**self.llm_args)
+        # self.llm = llm_class(**self.llm_args)
+        self.llm = llm_class()
 
         self.transcript_diarizer = LLMChain(
             llm=self.llm,
