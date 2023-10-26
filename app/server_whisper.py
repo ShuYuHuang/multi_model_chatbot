@@ -14,14 +14,13 @@ import numpy as np
 import whisper
 
 from params import (
-    DEFAULT_MODEL_DIR,
     DEFAULT_TMP_DIR
 )
 
 app = FastAPI()
 
 @lru_cache(maxsize=1)
-def get_whisper_model(whisper_model: str, download_root:str=DEFAULT_MODEL_DIR):
+def get_whisper_model(whisper_model: str, download_root:str='../models'):
     """Get a whisper model from the cache or download it if it doesn't exist"""
     model = whisper.load_model(
         whisper_model,
