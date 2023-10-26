@@ -1,5 +1,6 @@
 import tempfile
 import requests
+import re
 
 # from PIL import Image
 from langchain.document_loaders import PyPDFLoader
@@ -9,8 +10,8 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter, CharacterTex
 
 from langchain.schema import Document
 from langchain.chains import LLMChain
-# from langchain.chat_models import ChatOpenAI
-from vicuna_client import VicunaLLM
+from langchain.chat_models import ChatOpenAI
+# from vicuna_client import VicunaLLM
 from langchain.prompts import PromptTemplate
 
 # for amount control
@@ -25,17 +26,23 @@ from params import (
 )
 
 DIARIZER_TEMPLATE = """
-### Human
-Determine the characters for the transcript in SRT format, and assign the character to the beginning of transcript, e.g. 
-99
+Request:
+
+Determine the characters for the transcript in SRT format, and assign the character to the beginning of transcript, 
+e.g. 
+```
+01
 00:32:01.000 --> 00 00:32:02.000
-Speaker C: The suspect didn't show up last night
+ Speaker C: The suspect didn't show up last night
+```
 
 Here is the input:
+```
 {transcript}
+```
 
-### Assistant
-Return:
+
+Response between ``` and ```:
 """
 diarizer_prompt = PromptTemplate(
     input_variables=["transcript"],
@@ -74,7 +81,8 @@ def split_list(original_list, length):
 @st.cache_resource(max_entries=1)
 class FileProcessor:
     def __init__(self,
-                 llm_class=VicunaLLM,
+                 llm_class=ChatOpenAI,
+                #  llm_class=VicunaLLM,
                  llm_args=DEFAULT_LLM_ARGS,
                  model_root='models',
                  whisper_model="large-v2",
@@ -90,8 +98,8 @@ class FileProcessor:
         self.diarizer_prompt = diarizer_prompt
         self.llm_args = llm_args
         
-        # self.llm = llm_class(**self.llm_args)
-        self.llm = llm_class()
+        self.llm = llm_class(**self.llm_args)
+        # self.llm = llm_class()
 
         self.transcript_diarizer = LLMChain(
             llm=self.llm,
@@ -140,7 +148,13 @@ class FileProcessor:
 
         doc= []
         data = self.transcript_diarizer.run(transcript=conversations)
-        doc.append(Document(page_content=data, metadata={"source": uploaded_file}))
+        print(data)
+
+        srt_data = re.findall(r"```\n(.+)\n```", data, re.DOTALL)
+        if len(srt_data) > 0:
+            doc.append(Document(page_content=srt_data[0], metadata={"source": uploaded_file}))
+        else:
+            doc.append(Document(page_content="Empty Sound", metadata={"source": uploaded_file}))
 
         docs = self.splitter.split_documents(doc)
         # Determine the speaker
@@ -160,9 +174,13 @@ class FileProcessor:
 
 
 if __name__ == '__main__':
-    import streamlit as st
+    from time import time
     import tempfile 
     import dotenv
+
+    import streamlit as st
+    import langchain
+    langchain.verbose = True
     # load system variables
     dotenv.load_dotenv()
 
@@ -184,6 +202,8 @@ if __name__ == '__main__':
                 # Save a temporary file
                 tmp_file.write(files.getvalue())
                 # Extract contents from the file
+            start_time = time()
             text = file_processor.process_file(tmp_file.name)
+            print(f"\n---{time()- start_time} seconds")
             for t in text:
                 st.markdown(t.page_content)

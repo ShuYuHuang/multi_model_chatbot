@@ -12,7 +12,8 @@ import requests
 # import os
 # os.environ['CURL_CA_BUNDLE'] = ''
 
-VICUNA_URL = 'http://10.100.100.104:8013/v1/completions'
+# VICUNA_URL = 'http://10.100.100.104:8013/v1/completions'
+VICUNA_URL = 'http://10.100.100.104:8014/v1/completions'
 VICUNA_HEADER = {
     'accept': 'application/json',
     'Content-Type': 'application/json'
@@ -51,9 +52,10 @@ class VicunaLLM(LLM):
     
     def __init__(
             self,
-            model_name: str = "vicuna-13b-v1.5-16k",
+            model_name: str = "gpt-3.5-turbo",
+            # model_name: str = "vicuna-13b-v1.5-16k",
             model_url: str = VICUNA_URL,
-            max_tokens: int = 512,
+            max_tokens: int = 300,
             temperature: int = 0.0):
         super().__init__()
         self.model_name = model_name
@@ -128,23 +130,18 @@ if __name__ == '__main__':
         prompt=template
     )
 
-    # prompts = ['Write me a python script that calculate 5+5',
-    # 'Write me a python script that print "Hello World"' ,
-    # 'Write me a poam about Paris',
-    # 'What is the biggist country?',
-    # 'What is the capital of UAE? give me simple answer']
+    prompts = ['\nQuestion:\nWrite me a python script that calculate 5+5 \nShort Response:\n',
+    '\nQuestion:\nWrite me a python script that print "Hello World" \nShort Response:\n' ,
+    '\nQuestion:\nWrite me a poam about Paris \nShort Response:\n',
+    '\nQuestion:\nWhat is the biggist country? \nShort Response:\n',
+    '\nQuestion:\nWhat is the capital of UAE? give me simple answer \nShort Response:\n']
 
-    prompts = [
-    """Determine the characters for the transcript in SRT format, and assign the character to the beginning of transcript, e.g. \n99\n00:32:01.000 --> 00 00:32:02.000\nSpeaker C: The suspect didn't show up last night\n\nHere is the input:\n0\n00:00:00.000 --> 00:00:03.200\n Doesn't really look like anyone's been doing cocaine off that table, does it?\n\n1\n00:00:05.600 --> 00:00:07.900\n With all due respect, I'm not sure you know how that works.\n\n2\n00:00:08.800 --> 00:00:10.200\n I'm asking if you do.\n\n3\n00:00:10.800 --> 00:00:12.200\n You've testified you've done cocaine.\n\n4\n00:00:12.200 --> 00:00:12.800\n I have.\n\n5\n00:00:13.300 --> 00:00:17.400\n Doesn't really look like Mr. Depp or anyone was doing cocaine off that table, does it?\n\n6\n00:00:17.600 --> 00:00:20.100\n Uh, I beg to differ with you on that.\n\n7\n00:00:20.100 --> 00:00:23.000\n When you snort cocaine, typically it goes into your nose.\n\n\n\n\n\nReturn:\n"""
-    ]
+    # prompts = [
+    # """Determine the characters for the transcript in SRT format, and assign the character to the beginning of transcript, e.g. \n99\n00:32:01.000 --> 00 00:32:02.000\nSpeaker C: The suspect didn't show up last night\n\nHere is the input:\n0\n00:00:00.000 --> 00:00:03.200\n Doesn't really look like anyone's been doing cocaine off that table, does it?\n\n1\n00:00:05.600 --> 00:00:07.900\n With all due respect, I'm not sure you know how that works.\n\n2\n00:00:08.800 --> 00:00:10.200\n I'm asking if you do.\n\n3\n00:00:10.800 --> 00:00:12.200\n You've testified you've done cocaine.\n\n4\n00:00:12.200 --> 00:00:12.800\n I have.\n\n5\n00:00:13.300 --> 00:00:17.400\n Doesn't really look like Mr. Depp or anyone was doing cocaine off that table, does it?\n\n6\n00:00:17.600 --> 00:00:20.100\n Uh, I beg to differ with you on that.\n\n7\n00:00:20.100 --> 00:00:23.000\n When you snort cocaine, typically it goes into your nose.\n\n\n\n\n\nReturn:\n"""
+    # ]
 
     # result = llm._acall(prompt=question) # result in multi calls
     # result = llm._call(prompt=question) # result in multi calls
-
-    
-
-
-    
 
     # async def search_agent_demo():
     #     return simple_chatbot.run(question=question)
