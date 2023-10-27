@@ -10,7 +10,7 @@ import tempfile
 import requests
 
 # For file retrieval
-from es_client import ElasticsearchIndexer
+from multi_model_chatbot.app.client_es import ElasticsearchIndexer
 from file_processor import FileProcessor
 from params import (
     DEFAULT_LLM_ARGS,
@@ -24,6 +24,16 @@ from params import (
 from langchain import PromptTemplate
 
 QUERY_INTEGRATION_TEMPLATE  = """
+Request:
+
+The questions are all related to either query results or history, 
+please reply to the asked questions only, do not extend to other questions
+
+If the question is related to querying results:
+- Extract information from queried result and answer the question
+Else if the question is related to history:
+- Extract information from history and answer the question
+
 Queried results form database:
 ```
 {queried}
@@ -37,15 +47,12 @@ History:
 You are asked:
 {input}
 
-The questions are all related to either query results or history
-
-If the question is related to querying results:
-- Extract information from queried result and answer the question
-Else if the question is related to history:
-- Extract information from history and answer the question
-If the question is not related to either querying result or history:
-- Politely inform that the result is not related to either history or database
+Respond:
 """
+
+# If the question is not related to either querying result or history:
+# - Politely inform that the result is not related to either history or database
+# """
 query_integration_prompt = PromptTemplate(
         template=QUERY_INTEGRATION_TEMPLATE,
         input_variables=["history", "input", "queried"]
@@ -93,7 +100,7 @@ def display_user_input_form():
 def handle_user_input(conversation_chain, user_input, indexer):
     if 'history' not in st.session_state:
             st.session_state['history'] = []
-    queried_docs = indexer.search_files(user_input, k=5)
+    queried_docs = indexer.search_files(user_input, k=3)
     response = conversation_chain.predict(
         input=user_input,
         history="\n".join(map(lambda x: f"user:{x[0]} | robot:{x[1]}",st.session_state['history'])),
@@ -134,12 +141,16 @@ def delete_conversations():
 
 if __name__ == '__main__':
     from langchain.chains import LLMChain
+    from langchain.embeddings import HuggingFaceEmbeddings
     from langchain.chat_models import ChatOpenAI
+    # from client_vicuna import VicunaLLM
+
     import dotenv
     # load system variables
     dotenv.load_dotenv()
 
     LLM_CLASS = ChatOpenAI
+    # LLM_CLASS = VicunaLLM
 
     st.title("MMChat 📄🎥📢🦜🦙")
     # Upload file
@@ -148,10 +159,12 @@ if __name__ == '__main__':
 
         
          # Create Processor
-        processor = FileProcessor(llm_class= LLM_CLASS)
+        processor = FileProcessor(llm_class= LLM_CLASS, llm_args=DEFAULT_LLM_ARGS)
 
         # Create an Elasticsearch indexer.
         elasticsearch_indexer = ElasticsearchIndexer(
+            llm=LLM_CLASS,
+            embedding=HuggingFaceEmbeddings,
             index_name=DEFAULT_INDEX_NAME,
             es_url=DEFAULT_ES_URL
         )
