@@ -1,9 +1,9 @@
 # from langchain.embeddings.openai import OpenAIEmbeddings
-# from langchain.chat_models import ChatOpenAI
 
 # Embedding and Language models
-from langchain.embeddings import HuggingFaceEmbeddings
-from vicuna_client import VicunaLLM
+from langchain.embeddings import HuggingFaceEmbeddings # Using embedding model sentence-transformers_all-mpnet-base-v2
+# from client_vicuna import VicunaLLM
+from langchain.chat_models import ChatOpenAI
 
 # Vector database stuffs
 from langchain.vectorstores import ElasticsearchStore
@@ -22,15 +22,19 @@ from params import (
     DEFAULT_ES_URL,
     DEFAULT_TMP_DIR,
     DEFAULT_INDEX_NAME,
-    DEFAULT_MODEL_DIR
+    DEFAULT_MODEL_DIR,
+    DEFAULT_LLM_ARGS
 )
 
-QUERY_TEMPLATE="""You are an AI language model assistant. Your task is to generate five 
-different versions of the given user question to retrieve relevant documents from a vector 
+QUERY_TEMPLATE="""
+You are an AI language model assistant.
+Your task is to generate five different versions of the given original user question to retrieve relevant documents from a vector 
 database. By generating multiple perspectives on the user question, your goal is to help
 the user overcome some of the limitations of the distance-based similarity search. 
 Provide these alternative questions separated by newlines.
-Original question: {question}"""
+Original user question: {question}
+
+New Questions:"""
 example_query_prompt = PromptTemplate(
     input_variables=["question"],
     template=QUERY_TEMPLATE,
@@ -53,9 +57,9 @@ class LineListOutputParser(PydanticOutputParser):
 class ElasticsearchIndexer:
     def __init__(self,
                 #  embedding=OpenAIEmbeddings,
-                #  llm=ChatOpenAI,
+                 llm=ChatOpenAI,
                  embedding=HuggingFaceEmbeddings,
-                 llm=VicunaLLM,
+                #  llm=VicunaLLM,
                  query_prompt=example_query_prompt,
                  output_parser = LineListOutputParser(),
                  es_url=DEFAULT_ES_URL,
@@ -71,8 +75,9 @@ class ElasticsearchIndexer:
             distance_strategy=distance_strategy
         )
         
-        self.llm = llm(temperature=0)
+        self.llm = llm(**DEFAULT_LLM_ARGS)
         self.llm_chain = LLMChain(llm=self.llm, prompt=query_prompt, output_parser=output_parser)
+        
         self.retriever = MultiQueryRetriever(
             retriever=self.vdb.as_retriever(),
             llm_chain=self.llm_chain,
@@ -97,8 +102,17 @@ class ElasticsearchIndexer:
         return results
 
 if __name__ == '__main__':
-    import streamlit as st
+    
     import tempfile
+    import dotenv
+
+    import langchain
+    import streamlit as st
+
+
+    langchain.verbose = True
+    
+    dotenv.load_dotenv()
 
     # Create Processor
     processor = FileProcessor()
@@ -109,6 +123,7 @@ if __name__ == '__main__':
     )
     
     # Process a sample file.
+    query = st.text_input("Search Something:", value = "Descrive the file")
     uploaded_files = st.file_uploader(
         "Choose a file",
         accept_multiple_files=True,
@@ -120,9 +135,10 @@ if __name__ == '__main__':
                 # Save a temporary file
                 tmp_file.write(files.getvalue())
                 # Extract contents from the file
+            
             elasticsearch_indexer.index_files(tmp_file.name, processor)
 
-            query = 'what is the document said'
+            
             results = elasticsearch_indexer.search_files(query)
 
             st.write(results)

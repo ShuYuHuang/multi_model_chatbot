@@ -11,7 +11,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter, CharacterTex
 from langchain.schema import Document
 from langchain.chains import LLMChain
 from langchain.chat_models import ChatOpenAI
-# from vicuna_client import VicunaLLM
+# from client_vicuna import VicunaLLM
 from langchain.prompts import PromptTemplate
 
 # for amount control
