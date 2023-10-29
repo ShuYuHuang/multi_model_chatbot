@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Elasticsearch server address
-ELASTICSEARCH_URL="localhost:9200"
+ELASTICSEARCH_URL="10.100.100.104:9200"
 
 # Function to list all existing indices (excluding the first one)
 list_indices() {
