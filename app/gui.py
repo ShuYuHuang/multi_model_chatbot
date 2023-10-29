@@ -10,7 +10,7 @@ import tempfile
 import requests
 
 # For file retrieval
-from multi_model_chatbot.app.client_es import ElasticsearchIndexer
+from client_es import ElasticsearchIndexer
 from file_processor import FileProcessor
 from params import (
     DEFAULT_LLM_ARGS,
@@ -70,18 +70,28 @@ def add_files_section():
             accept_multiple_files=True,
             key=st.session_state["file_uploader_key"])
         
+        
         return uploaded_files
 
 # Section for upload file to elastic search
-def upload_file_to_esearch(uploaded_files, es_indexer, processor):
+def upload_file_to_esearch(uploaded_files, es_indexer):
+
+    # Preventing uploading multiple times
+    if 'upload_list' not in st.session_state:
+        st.session_state['upload_list'] = []
+
     if uploaded_files is not []:
-        for files in uploaded_files:
-            suffix = "."+files.name.split(".")[-1]
+        for file in uploaded_files:
+
+            if file in st.session_state['upload_list']:
+                continue
+            suffix = "."+file.name.split(".")[-1]
             with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=DEFAULT_TMP_DIR) as tmp_file:
                 # Save a temporary file
-                tmp_file.write(files.getvalue())
+                tmp_file.write(file.getvalue())
                 # Extract contents from the file
-            es_indexer.index_files(tmp_file.name, processor)
+            es_indexer.index_files(tmp_file.name)
+            st.session_state['upload_list'].append(file)
 
 
 # Section for upload file to elastic search
@@ -131,11 +141,13 @@ def delete_indices():
         response = requests.delete(f'{st.session_state["es_url"]}/{st.session_state["index_name"]}')
         print("deletion status:",response.text)
     st.session_state["file_uploader_key"] += 1
-    del st.session_state['generated'], st.session_state['past'], st.session_state["history"]
+    if 'history' in st.session_state:
+        del st.session_state['generated'], st.session_state['past'], st.session_state["history"]
     st.rerun()
 
 def delete_conversations():
-    del st.session_state['generated'], st.session_state['past'], st.session_state["history"]
+    if 'history' in st.session_state:
+        del st.session_state['generated'], st.session_state['past'], st.session_state["history"]
     st.rerun()
 
 
@@ -168,9 +180,10 @@ if __name__ == '__main__':
             index_name=DEFAULT_INDEX_NAME,
             es_url=DEFAULT_ES_URL
         )
+        elasticsearch_indexer.add_processor(processor)
 
         # Upload button and mechanisms
-        upload_file_to_esearch(uploaded_files, elasticsearch_indexer, processor)
+        upload_file_to_esearch(uploaded_files, elasticsearch_indexer)
 
         # Create LLM
         llm = LLM_CLASS(**DEFAULT_LLM_ARGS)
