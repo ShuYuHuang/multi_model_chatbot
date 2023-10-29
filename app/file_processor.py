@@ -1,6 +1,7 @@
 import tempfile
 import requests
 import re
+import subprocess
 
 # from PIL import Image
 from langchain.document_loaders import PyPDFLoader
@@ -51,18 +52,30 @@ diarizer_prompt = PromptTemplate(
 
 
 WHISPER_URL = 'http://10.100.100.106:8001/v1/audio/transcriptions'
+# WHISPER_URL = 'http://0.0.0.0:8001/v1/audio/transcriptions'
+# WHISPER_HEADER = {
+#     'accept': 'application/json',
+#     'Content-Type': 'application/x-www-form-urlencoded'
+# }
 WHISPER_HEADER = {
     'accept': 'application/json',
-    'Content-Type': 'application/x-www-form-urlencoded'
+    # 'Content-Type': 'multipart/form-data'
 }
 
+
+
 def transcribe(uploaded_file, whisper_model):
+    subprocess.run(['chmod','777',uploaded_file])
+    file_name = uploaded_file.split("/")[-1]
+
     data = {
-        'existed_file': uploaded_file,
+        'existed_file': file_name,
         'model': whisper_model,
         'response_format': 'srt',
-        'temperature': '0',
+        'temperature': '0.0',
+        'top_p': '0.0',
     }
+    print(data)
     transcript = requests.post(WHISPER_URL, headers=WHISPER_HEADER, data=data).json()
     # Save transcribe
     with tempfile.NamedTemporaryFile(
@@ -88,7 +101,7 @@ class FileProcessor:
                  whisper_model="large-v2",
                  initialize_prompt=None,
                  diarizer_prompt=diarizer_prompt,
-                 chunk_size=1000,
+                 chunk_size=5000,
                  chunk_overlap=0):
         
         # Whisper parameters
@@ -143,8 +156,6 @@ class FileProcessor:
         
         # Transcribe
         conversations = transcribe(uploaded_file, whisper_model=self.whisper_model)
-        
-
 
         doc= []
         data = self.transcript_diarizer.run(transcript=conversations)
@@ -203,6 +214,7 @@ if __name__ == '__main__':
                 tmp_file.write(files.getvalue())
                 # Extract contents from the file
             start_time = time()
+            print(tmp_file.name)
             text = file_processor.process_file(tmp_file.name)
             print(f"\n---{time()- start_time} seconds")
             for t in text:

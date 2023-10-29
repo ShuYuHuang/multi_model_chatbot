@@ -27,6 +27,7 @@ from params import (
 )
 
 QUERY_TEMPLATE="""
+Request:
 You are an AI language model assistant.
 Your task is to generate five different versions of the given original user question to retrieve relevant documents from a vector 
 database. By generating multiple perspectives on the user question, your goal is to help
@@ -53,7 +54,7 @@ class LineListOutputParser(PydanticOutputParser):
         lines = text.strip().split("\n")
         return LineList(lines=lines)
 
-@st.cache_resource(max_entries=10)
+@st.cache_resource(max_entries=1)
 class ElasticsearchIndexer:
     def __init__(self,
                 #  embedding=OpenAIEmbeddings,
@@ -83,11 +84,13 @@ class ElasticsearchIndexer:
             llm_chain=self.llm_chain,
             parser_key="lines"
         ) # "lines" is the key (attribute name) of the parsed output
+    def add_processor(self,processor):
+        self.processor = processor
 
-
-    def index_files(self, uploaded_file, processor):
+    st.cache_resource(max_entries=1)
+    def index_files(self, uploaded_file):
         # Extract the relevant information from the uploaded file.
-        extracted_docs = processor.process_file(uploaded_file)
+        extracted_docs = self.processor.process_file(uploaded_file)
 
         # Index the extracted information in Elasticsearch.
         self.vdb.add_documents(extracted_docs)
@@ -121,6 +124,7 @@ if __name__ == '__main__':
     elasticsearch_indexer = ElasticsearchIndexer(
         index_name=DEFAULT_INDEX_NAME,
     )
+    elasticsearch_indexer.add_processor(processor)
     
     # Process a sample file.
     query = st.text_input("Search Something:", value = "Descrive the file")
@@ -136,7 +140,7 @@ if __name__ == '__main__':
                 tmp_file.write(files.getvalue())
                 # Extract contents from the file
             
-            elasticsearch_indexer.index_files(tmp_file.name, processor)
+            elasticsearch_indexer.index_files(tmp_file.name)
 
             
             results = elasticsearch_indexer.search_files(query)

@@ -8,7 +8,8 @@ ALL_FILE_TYPES = DOCUMENT_FILE_TYPES + SHEET_FILE_TYPES + MEDIA_FILE_TYPES + IMA
 DEFAULT_LLM_ARGS = dict(
     model_name='gpt-3.5-turbo',
     temperature=0,
-    max_tokens=1000
+    max_tokens=1000,
+    top_p=0.1,
 )
 
 # DEFAULT_LLM_ARGS = dict(
@@ -21,4 +22,4 @@ DEFAULT_INDEX_NAME = "myindex"
 DEFAULT_ES_URL = "http://10.100.100.104:9200"
 DEFAULT_TMP_DIR = "tmp"
 
-DEFAULT_MODEL_DIR = "models"
+DEFAULT_MODEL_DIR = "/raid/shuyu/models"
