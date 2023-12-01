@@ -1,7 +1,6 @@
-# from langchain.embeddings.openai import OpenAIEmbeddings
-
 # Embedding and Language models
 from langchain.embeddings import HuggingFaceEmbeddings # Using embedding model sentence-transformers_all-mpnet-base-v2
+# from langchain.embeddings.openai import OpenAIEmbeddings
 # from client_vicuna import VicunaLLM
 from langchain.chat_models import ChatOpenAI
 
@@ -23,8 +22,12 @@ from params import (
     DEFAULT_TMP_DIR,
     DEFAULT_INDEX_NAME,
     DEFAULT_MODEL_DIR,
-    DEFAULT_LLM_ARGS
+    DEFAULT_LLM_ARGS,
+    OPENAI_API_BASE
 )
+
+import dotenv
+dotenv.load_dotenv()
 
 QUERY_TEMPLATE="""
 Request:
@@ -69,10 +72,12 @@ class ElasticsearchIndexer:
                  ):
         self.es_url = es_url
         self.index_name = index_name
+        self.embedder = embedding()
+        
         self.vdb = ElasticsearchStore(
             es_url = self.es_url,
             index_name=self.index_name,
-            embedding=embedding(cache_folder=DEFAULT_MODEL_DIR),
+            embedding=self.embedder,
             distance_strategy=distance_strategy
         )
         

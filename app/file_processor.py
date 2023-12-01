@@ -4,8 +4,12 @@ import re
 import subprocess
 
 # from PIL import Image
-from langchain.document_loaders import PyPDFLoader
-from langchain.document_loaders import TextLoader
+from langchain.document_loaders import (
+    PyPDFLoader,
+    TextLoader,
+    Docx2txtLoader
+)
+from langchain.document_loaders.csv_loader import CSVLoader
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter, CharacterTextSplitter
 
@@ -24,6 +28,7 @@ from params import (
     DEFAULT_TMP_DIR,
     MEDIA_FILE_TYPES,
     IMAGE_FILE_TYPES,
+    SHEET_FILE_TYPES
 )
 
 DIARIZER_TEMPLATE = """
@@ -68,15 +73,16 @@ def transcribe(uploaded_file, whisper_model):
     subprocess.run(['chmod','777',uploaded_file])
     file_name = uploaded_file.split("/")[-1]
 
-    data = {
-        'existed_file': file_name,
+    payload = {
+        'existed_file': '',
         'model': whisper_model,
         'response_format': 'srt',
         'temperature': '0.0',
         'top_p': '0.0',
     }
-    print(data)
-    transcript = requests.post(WHISPER_URL, headers=WHISPER_HEADER, data=data).json()
+    files = {'files': (file_name, open(uploaded_file, 'rb'), 'audio/x-wav')}
+    print(payload, files)
+    transcript = requests.post(WHISPER_URL, headers=WHISPER_HEADER, data=payload, files=files).json()
     # Save transcribe
     with tempfile.NamedTemporaryFile(
         delete=False,
@@ -130,13 +136,17 @@ class FileProcessor:
         # Process the file based on the file type.
         if file_type == 'pdf':
             return self.extract_text_from_pdf(uploaded_file)
-        elif file_type in ['txt', 'docx']:
+        elif file_type in ['txt']:
             return self.extract_text_from_text_file(uploaded_file)
+        elif file_type in ['doc','docx']:
+            return self.extract_from_doc(uploaded_file)
+        elif file_type in SHEET_FILE_TYPES:
+            return self.extract_from_csv(uploaded_file)
         elif file_type in MEDIA_FILE_TYPES:
             return self.extract_text_from_speech_audio(uploaded_file)
         # elif file_type in ['jpg', 'png']:
         #     return self.extract_features_from_image(uploaded_file)
-        else:
+        else:   
             raise ValueError('Unsupported file type: {}'.format(file_type))
 
     def extract_text_from_pdf(self, uploaded_file):
@@ -150,7 +160,15 @@ class FileProcessor:
         loader = TextLoader(uploaded_file)
         docs = loader.load_and_split(self.splitter)
         return docs
-
+    
+    def extract_from_csv(self, uploaded_file):
+        loader = CSVLoader(file_path=uploaded_file)
+        return loader.load()
+    
+    def extract_from_doc(self, uploaded_file):
+        loader = Docx2txtLoader(file_path=uploaded_file)
+        docs = loader.load_and_split(self.splitter)
+        return docs
     
     def extract_text_from_speech_audio(self, uploaded_file):
         

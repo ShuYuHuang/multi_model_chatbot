@@ -20,6 +20,7 @@ DEFAULT_LLM_ARGS = dict(
 
 DEFAULT_INDEX_NAME = "myindex"
 DEFAULT_ES_URL = "http://10.100.100.104:9200"
-DEFAULT_TMP_DIR = "tmp"
+OPENAI_API_BASE = "http://10.100.100.106:8014/v1"
+DEFAULT_TMP_DIR = "/raid/shuyu/tmp"
 
 DEFAULT_MODEL_DIR = "/raid/shuyu/models"
