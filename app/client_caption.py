@@ -12,7 +12,8 @@ from params import DEFAULT_TMP_DIR
 
 
 ENCODE_PARAM = [int(cv2.IMWRITE_JPEG_QUALITY), 95]  # Adjust the quality as needed
-BLIP_URL = 'http://10.100.100.106:10002'
+BLIP_URL = "http://10.100.100.106:10002"
+LLAVA_URL1 = 'http://10.100.100.106:8015'
 DEFAULT_VQA_PROMPT = 'Describe the image concisely.'
 DEFAULT_LLAVA_POMPT = 'Describe the image concisely in 20 words.'
 
@@ -144,12 +145,14 @@ class LlavaCaptioner(BaseCaptioner):
     # def load_model(self) -> Dict:
     #     return requests.post(self.url + "/load_model", data={"task": self.task}, timeout=300).json()
     
-    async def send_frames(self, frame64, prompt = DEFAULT_LLAVA_POMPT):
+    def send_frame(self, frame64, prompt = DEFAULT_LLAVA_POMPT):
         pload = {
             "img_base64": frame64,
-            "query": f"Question: {prompt} Answer:"
+            "query": f"Question: {prompt} Answer:",
+            "temperature": 0.01,
+            "max_new_tokens": 255,
         }
-        return await requests.post(self.url + "/image_chat", data=pload, timeout=30).json()['assistant']
+        return requests.post(self.url + "/image_chat", data=pload, timeout=30).json()['assistant']
 
 
 if __name__=="__main__":
