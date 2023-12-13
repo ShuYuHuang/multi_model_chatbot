@@ -1,4 +1,5 @@
-# For Streamlit
+# -Import
+## For Streamlit
 import streamlit as st
 # from streamlit_chat import message
 
@@ -26,15 +27,22 @@ from params import (
 )
 
 ## For chatting integration
+
 from langchain import PromptTemplate
 from langchain.chains.question_answering import load_qa_chain
+# from langchain.agents import create_pandas_dataframe_agent
+from langchain_experimental.agents import create_pandas_dataframe_agent
 
 ## For plotting and plot summary
-from client_caption import LlavaCaptioner, LLAVA_URL1
 import re
+import base64
+import json
+from client_caption import LlavaCaptioner, LLAVA_URL1
 import pandas as pd
 import plotly.io as pio
-import base64
+import plotly.express as px
+
+
 
 
 
@@ -50,25 +58,17 @@ from prompt_template_ar import (
 
 
 # -Prompt templates
-query_integration_prompt = PromptTemplate(
-        template=QUERY_INTEGRATION_TEMPLATE,
-        input_variables=["history", "input", "queried"]
-)
-data_short_description_prompt = PromptTemplate(
-        template=DATA_SHORT_DESCRIPTION,
-        input_variables=["table_data"]
-)
 
-prmpted_csv_plot_prompt = PromptTemplate(
-        template=PRMPTED_CSV_PLOT,
-        input_variables=["filename", "head3lines", "instructions"]
-)
+
+# prmpted_csv_plot_prompt = PromptTemplate(
+#         template=PRMPTED_CSV_PLOT,
+#         input_variables=["filename", "head3lines", "instructions"]
+# )
 
 # describe_plot_prompt = PromptTemplate(
 #         template=PRMPTED_CSV_PLOT,
 #         input_variables=[""]
 # )
-
 
 # -Tools
 ## For code generation
@@ -136,7 +136,13 @@ def display_user_input_form():
     
     return response_container, user_input, submit_button
 
-# Get reply from bot
+# -Retrieval and reply
+## QA prompt with history and query
+query_integration_prompt = PromptTemplate(
+    template=QUERY_INTEGRATION_TEMPLATE,
+    input_variables=["history", "input", "queried"]
+)
+
 def handle_user_input(chain, indexer, user_input):
     if 'history' not in st.session_state:
         st.session_state['history'] = []
@@ -154,8 +160,22 @@ def handle_user_input(chain, indexer, user_input):
     st.session_state['history'].append((user_input, response))
     return response
 
+# -Plot functions
+## decode the responded json format
+def decode_response(response: str) -> dict:
+    """This function converts the string response from the model to a dictionary object.
+
+    Args:
+        response (str): response from the model
+
+    Returns:
+        dict: dictionary with response data
+    """
+    return json.loads(response)
+    
+
 def plot_with_analysis(
-        plot_chain,
+        llm,
         captioner,
         local_file,
         user_input):
@@ -164,39 +184,71 @@ def plot_with_analysis(
     # queried_docs = indexer.search_files(user_input, k=1)
 
     csv_df = pd.read_csv(local_file)
-    
-    # Get code for plotting
-    code_resp = plot_chain.predict(
-        filename=local_file,
-        head3lines=csv_df.head(3).to_csv(),
-        instructions=user_input
+
+    agent = create_pandas_dataframe_agent(
+        llm,
+        csv_df,
+        verbose=True)
+
+    response = agent.run(
+        PRMPTED_CSV_PLOT.format(
+            file_name=local_file,
+            instructions=user_input
+        )
     )
-    code = get_image_code(code_resp)
-
-    open('code_tmp.txt','w').write(code)
     
-    # Execute plot code
-    exec_var = {
-        'csv_df':csv_df
-        }
-    exec(code, exec_var)
-    
-    if 'fig' not in exec_var:
-        st.session_state['history'].append((user_input, exec_var['resp']))
-        return exec_var['resp'], None
+    response_dict = decode_response(str(response))
 
-    image_bytes = pio.to_image(exec_var['fig'], format="png")   
+    ## Write a response from an agent to a Streamlit app.
+    fig = None
+    if "answer" in response_dict:
+        final_response = response_dict["answer"]
+        return final_response, fig
+
+    # Check if the response is a table.
+    if "table" in response_dict:
+        data = response_dict["table"]
+        df = pd.DataFrame(data["data"], columns=data["columns"])
+        final_response = df.to_markdown()
+        return final_response, fig
+    
+    # Check if the response is a bar chart.
+    if "bar" in response_dict:
+        data = response_dict["bar"]
+        try:
+            df_data = {
+                    col: [x[i] if isinstance(x, list) else x for x in data['data']]
+                    for i, col in enumerate(data['columns'])
+                }       
+            df = pd.DataFrame(df_data)
+            fig = px.bar(df)
+        except ValueError:
+            print(f"Couldn't create DataFrame from data: {data}")
+
+    # Check if the response is a line chart.
+    if "line" in response_dict:
+        data = response_dict["line"]
+        try:
+            df_data = {col: [x[i] for x in data['data']] for i, col in enumerate(data['columns'])}
+            df = pd.DataFrame(df_data)
+            # Create a figure and axis using pyplot
+            fig = px.line(df)
+        except ValueError:
+            print(f"Couldn't create DataFrame from data: {data}")
+    
+    image_bytes = pio.to_image(fig, format="png")   
     base64_encoded_image = base64.b64encode(image_bytes).decode('utf-8')
-    # import pickle
-    # pickle.dump(base64_encoded_image, open('tmp.pkl', 'wb'))
+    import pickle
+    pickle.dump(base64_encoded_image, open('tmp.pkl', 'wb'))
 
 
-    image_chat_response = captioner.send_frame(
+    final_response = captioner.send_frame(
         base64_encoded_image,
         DISCRIBE_PLOT.format(user_input=user_input)
     )
 
-    return image_chat_response, exec_var['fig']
+    st.session_state['history'].append((user_input, final_response))
+    return final_response, fig
 
 # Final display on chat container
 def display_messages():
@@ -243,7 +295,6 @@ def delete_conversations():
 
 
 
-
 if __name__ == '__main__':
     from langchain.chains import LLMChain
     from langchain.embeddings import HuggingFaceEmbeddings
@@ -276,12 +327,6 @@ if __name__ == '__main__':
         llm=llm,
         verbose=True,
         prompt=query_integration_prompt,
-    )
-
-    plot_chain = LLMChain(
-        llm=llm,
-        verbose=True,
-        prompt=prmpted_csv_plot_prompt,
     )
 
     st.session_state["es_url"] = elasticsearch_indexer.es_url
@@ -318,12 +363,13 @@ if __name__ == '__main__':
             # Display images if there is images
             with st.container() as analytic_sum_page:
                 response, myfig = plot_with_analysis(
-                    plot_chain,
+                    llm,
                     captioner,
                     local_file_name,
                     INITIAL_PLOT_INSTRUCTION
                 )
-                st.session_state['fig'] = myfig
+                if myfig:
+                    st.session_state['fig'] = myfig
 
             st.session_state['past'] = ['Summary:']
             st.session_state['generated'] = [response]
@@ -334,14 +380,15 @@ if __name__ == '__main__':
             if suffix == 'csv':
                 with st.container() as analytic_sum_page:
                     response, myfig = plot_with_analysis(
-                        plot_chain,
+                        llm,
                         captioner,
                         local_file_name,
-                        user_input[7:])
-                if myfig:
-                    st.session_state['fig'] = myfig
+                        user_input)
+                    if myfig:
+                        st.session_state['fig'] = myfig
                 # Update session state
                 st.session_state['past'].append(user_input)
+                st.session_state['generated'].append(response)
             else:
                 response = handle_user_input(
                     conversation_chain,
@@ -351,16 +398,14 @@ if __name__ == '__main__':
                 # Update session state
                 st.session_state['past'].append(user_input)
             st.session_state['generated'].append(response)
-        
         # Display images if there is images
         with st.container() as visul_display:
             with st.expander("Visulaization", expanded=True):
                 if 'fig' in st.session_state:
                     st.plotly_chart(st.session_state['fig'], theme='streamlit', use_container_width=True)
-
         # Display messages
         display_messages()
 
-
+        
 
     ######################################
