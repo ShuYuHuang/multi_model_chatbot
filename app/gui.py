@@ -3,16 +3,16 @@ import streamlit as st
 # from streamlit_chat import message
 
 
-# For tackling uploaded files
+## For tackling uploaded files
 # import tempfile
 from glob import glob
 import os
 from os import path
 
-# For index deletion
+## For index deletion
 import requests
 
-# For file retrieval
+## For file retrieval
 from client_es import ElasticsearchIndexer
 from file_processor import FileProcessor
 from params import (
@@ -25,47 +25,68 @@ from params import (
     DEFAULT_ES_URL
 )
 
-# For chatting integration
+## For chatting integration
 from langchain import PromptTemplate
 from langchain.chains.question_answering import load_qa_chain
 
+## For plotting and plot summary
+from client_caption import LlavaCaptioner, LLAVA_URL1
+import re
+import pandas as pd
+import plotly.io as pio
+import base64
 
-QUERY_INTEGRATION_TEMPLATE  = """
-Request:
 
-The questions are all related to either query results or history, 
-please reply to the asked questions only, do not extend to other questions
 
-If the question is related to querying results:
-- Extract information from queried result and answer the question
-Else if the question is related to history:
-- Extract information from history and answer the question
+# from prompt_template import (
+from prompt_template_ar import (
+    QUERY_INTEGRATION_TEMPLATE,
+    DATA_SHORT_DESCRIPTION,
+    PRMPTED_CSV_PLOT,
+    DISCRIBE_PLOT,
+    INITIAL_PLOT_INSTRUCTION
 
-Queried results form database:
-```
-{queried}
-```
+)
 
-History:
-```
-{history}
-```
 
-You are asked:
-{input}
-
-Respond:
-"""
-
-# If the question is not related to either querying result or history:
-# - Politely inform that the result is not related to either history or database
-# """
+# -Prompt templates
 query_integration_prompt = PromptTemplate(
         template=QUERY_INTEGRATION_TEMPLATE,
         input_variables=["history", "input", "queried"]
 )
+data_short_description_prompt = PromptTemplate(
+        template=DATA_SHORT_DESCRIPTION,
+        input_variables=["table_data"]
+)
 
-# Section for uploading files
+prmpted_csv_plot_prompt = PromptTemplate(
+        template=PRMPTED_CSV_PLOT,
+        input_variables=["filename", "head3lines", "instructions"]
+)
+
+# describe_plot_prompt = PromptTemplate(
+#         template=PRMPTED_CSV_PLOT,
+#         input_variables=[""]
+# )
+
+
+# -Tools
+## For code generation
+def get_image_code(response_text):
+    python_pattern = r'```python\s(.*?)```'
+    csv_pattern = r"\ncsv_df\s*=\s*.+\n"
+
+    # Use re.match to replace the matched pattern with an empty string
+    matches = re.findall(python_pattern, response_text, re.DOTALL)
+    if not matches:
+        return ""
+    code =  matches[0]
+    code = re.sub(csv_pattern, "", code)
+    code = code.replace("fig.show()", "")
+    return code
+
+# -Section for uploading files
+## add files to system
 def add_files_section():
     if "file_uploader_key" not in st.session_state:
         st.session_state["file_uploader_key"] = 0
@@ -116,24 +137,66 @@ def display_user_input_form():
     return response_container, user_input, submit_button
 
 # Get reply from bot
-def handle_user_input(conversation_chain, user_input, indexer):
+def handle_user_input(chain, indexer, user_input):
     if 'history' not in st.session_state:
-            st.session_state['history'] = []
+        st.session_state['history'] = []
     queried_docs = indexer.search_files(user_input, k=3)
 
-    response = conversation_chain.predict(
+    response = chain.predict(
         input=user_input,
         history="\n".join(map(lambda x: f"user:{x[0]} | robot:{x[1]}",st.session_state['history'])),
         queried = "\n".join(map(lambda x: x.page_content, queried_docs))
     )
-
-    # response = conversation_chain.run(
+    # response = chain.run(
     #     input_documents=queried_docs,
     #     question=user_input
     # )
-
     st.session_state['history'].append((user_input, response))
     return response
+
+def plot_with_analysis(
+        plot_chain,
+        captioner,
+        local_file,
+        user_input):
+    if 'history' not in st.session_state:
+        st.session_state['history'] = []
+    # queried_docs = indexer.search_files(user_input, k=1)
+
+    csv_df = pd.read_csv(local_file)
+    
+    # Get code for plotting
+    code_resp = plot_chain.predict(
+        filename=local_file,
+        head3lines=csv_df.head(3).to_csv(),
+        instructions=user_input
+    )
+    code = get_image_code(code_resp)
+
+    open('code_tmp.txt','w').write(code)
+    
+    # Execute plot code
+    exec_var = {
+        'csv_df':csv_df
+        }
+    exec(code, exec_var)
+    
+    if 'fig' not in exec_var:
+        st.session_state['history'].append((user_input, exec_var['resp']))
+        return exec_var['resp'], None
+
+    image_bytes = pio.to_image(exec_var['fig'], format="png")   
+    base64_encoded_image = base64.b64encode(image_bytes).decode('utf-8')
+    # import pickle
+    # pickle.dump(base64_encoded_image, open('tmp.pkl', 'wb'))
+
+
+    image_chat_response = captioner.send_frame(
+        base64_encoded_image,
+        DISCRIBE_PLOT.format(user_input=user_input)
+    )
+
+    return image_chat_response, exec_var['fig']
 
 # Final display on chat container
 def display_messages():
@@ -179,6 +242,8 @@ def delete_conversations():
 #     return None
 
 
+
+
 if __name__ == '__main__':
     from langchain.chains import LLMChain
     from langchain.embeddings import HuggingFaceEmbeddings
@@ -192,6 +257,8 @@ if __name__ == '__main__':
     LLM_CLASS = ChatOpenAI
     # LLM_CLASS = VicunaLLM
     processor = FileProcessor(llm_class=LLM_CLASS, llm_args=DEFAULT_LLM_ARGS)
+    captioner = LlavaCaptioner(LLAVA_URL1)
+
 
     # Create an Elasticsearch indexer.
     elasticsearch_indexer = ElasticsearchIndexer(
@@ -204,6 +271,18 @@ if __name__ == '__main__':
 
     # Create LLM
     llm = LLM_CLASS(**DEFAULT_LLM_ARGS)
+
+    conversation_chain = LLMChain(
+        llm=llm,
+        verbose=True,
+        prompt=query_integration_prompt,
+    )
+
+    plot_chain = LLMChain(
+        llm=llm,
+        verbose=True,
+        prompt=prmpted_csv_plot_prompt,
+    )
 
     st.session_state["es_url"] = elasticsearch_indexer.es_url
     st.session_state["index_name"] = elasticsearch_indexer.index_name
@@ -228,26 +307,60 @@ if __name__ == '__main__':
         #     verbose=True,
         # )
 
-        conversation_chain = LLMChain(
-            llm=llm,
-            verbose=True,
-            prompt=query_integration_prompt,
-        )
+
 
         # Delete Button
         st.button("New Conversation 🆕", on_click=delete_conversations)
 
         response_container, user_input, submit_button = display_user_input_form()
 
+        if ('history' not in st.session_state) and (suffix == 'csv'):
+            # Display images if there is images
+            with st.container() as analytic_sum_page:
+                response, myfig = plot_with_analysis(
+                    plot_chain,
+                    captioner,
+                    local_file_name,
+                    INITIAL_PLOT_INSTRUCTION
+                )
+                st.session_state['fig'] = myfig
+
+            st.session_state['past'] = ['Summary:']
+            st.session_state['generated'] = [response]
+
+
         if submit_button and (user_input is not None):
             # Handle user input and generate a response
-            response = handle_user_input(conversation_chain, user_input, elasticsearch_indexer)
-
-            # Update session state
-            st.session_state['past'].append(user_input)
+            if suffix == 'csv':
+                with st.container() as analytic_sum_page:
+                    response, myfig = plot_with_analysis(
+                        plot_chain,
+                        captioner,
+                        local_file_name,
+                        user_input[7:])
+                if myfig:
+                    st.session_state['fig'] = myfig
+                # Update session state
+                st.session_state['past'].append(user_input)
+            else:
+                response = handle_user_input(
+                    conversation_chain,
+                    elasticsearch_indexer,
+                    user_input)
+            
+                # Update session state
+                st.session_state['past'].append(user_input)
             st.session_state['generated'].append(response)
+        
+        # Display images if there is images
+        with st.container() as visul_display:
+            with st.expander("Visulaization", expanded=True):
+                if 'fig' in st.session_state:
+                    st.plotly_chart(st.session_state['fig'], theme='streamlit', use_container_width=True)
 
         # Display messages
         display_messages()
+
+
 
     ######################################
